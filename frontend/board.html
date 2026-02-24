@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Kanban Board</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+    <header>
+        <h2>Kanban Board</h2>
+        <input type="text" id="search" placeholder="Search tasks..." oninput="renderBoard()" />
+        <span id="ws-status" class="ws-badge offline" title="Real-time sync">● Live</span>
+        <button onclick="logout()">Logout</button>
+    </header>
+
+    <div class="toolbar">
+        <button class="btn-primary" onclick="showAddTask()">+ Add Task</button>
+        <button class="btn-secondary" onclick="showAddColumn()">+ Add Column</button>
+    </div>
+
+    <!-- Column Board — populated dynamically by app.js -->
+    <div class="board" id="board"></div>
+
+    <!-- ── Add Task Modal ───────────────────────────────── -->
+    <div id="task-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Add Task</h3>
+            <input id="task-title" placeholder="Title" />
+            <select id="task-priority">
+                <option>High</option>
+                <option selected>Medium</option>
+                <option>Low</option>
+            </select>
+            <input id="task-assignee" placeholder="Assignee" />
+            <select id="task-column-select"></select>
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="createTask()">Create</button>
+                <button class="btn-secondary" onclick="closeTaskModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Add Column Modal ─────────────────────────────── -->
+    <div id="col-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>New Column</h3>
+            <input id="col-name" placeholder="Column name" />
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="createColumn()">Create</button>
+                <button class="btn-secondary" onclick="closeColModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

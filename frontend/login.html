@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Login | Kanban</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+    <div class="login-container">
+        <h2>Kanban Login</h2>
+
+        <input type="email" id="email" placeholder="Email" />
+        <input type="password" id="password" placeholder="Password" onkeydown="if(event.key==='Enter') login()" />
+
+        <button onclick="login()">Login</button>
+
+        <p id="error" class="error"></p>
+
+        <p class="hint">
+            <strong>Demo credentials:</strong><br />
+            admin@kanban.com / admin123<br />
+            user@kanban.com / user123
+        </p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

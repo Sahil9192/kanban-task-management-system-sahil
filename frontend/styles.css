@@ -1,0 +1,366 @@
+/* ── Reset & Base ─────────────────────────────────────── */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f2f5;
+    color: #1a1a2e;
+    min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+
+header h2 {
+    font-size: 1.1rem;
+    white-space: nowrap;
+}
+
+header input {
+    flex: 1;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 20px;
+    background: #2e2e4e;
+    color: #fff;
+    outline: none;
+    font-size: .9rem;
+}
+
+header input::placeholder {
+    color: #aaa;
+}
+
+/* WebSocket live badge */
+.ws-badge {
+    font-size: .75rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background .4s;
+}
+
+.ws-badge.online {
+    background: #16c79a;
+    color: #fff;
+}
+
+.ws-badge.offline {
+    background: #666;
+    color: #ccc;
+}
+
+/* ── Toolbar ─────────────────────────────────────────── */
+.toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 14px 20px 0;
+}
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn-primary {
+    background: #5c6bc0;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .875rem;
+    font-weight: 600;
+    transition: background .2s, transform .1s;
+}
+
+.btn-primary:hover {
+    background: #3949ab;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: #5c6bc0;
+    border: 2px solid #5c6bc0;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .875rem;
+    font-weight: 600;
+    transition: all .2s;
+}
+
+.btn-secondary:hover {
+    background: #5c6bc0;
+    color: #fff;
+}
+
+/* ── Board ───────────────────────────────────────────── */
+.board {
+    display: flex;
+    gap: 14px;
+    padding: 16px 20px 30px;
+    overflow-x: auto;
+    min-height: calc(100vh - 110px);
+    align-items: flex-start;
+}
+
+/* ── Column ──────────────────────────────────────────── */
+.column {
+    background: #e8eaf6;
+    border-radius: 10px;
+    min-width: 240px;
+    width: 240px;
+    padding: 12px;
+    flex-shrink: 0;
+    transition: opacity .2s, transform .2s;
+    cursor: grab;
+}
+
+.column.dragging {
+    opacity: .45;
+    transform: scale(.97);
+    cursor: grabbing;
+}
+
+.column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    user-select: none;
+}
+
+.col-title {
+    font-weight: 700;
+    font-size: .95rem;
+    color: #3949ab;
+}
+
+.col-delete-btn {
+    background: transparent;
+    border: none;
+    color: #aaa;
+    font-size: .85rem;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    transition: color .2s, background .2s;
+}
+
+.col-delete-btn:hover {
+    color: #e53935;
+    background: #ffebee;
+}
+
+/* ── Task list ───────────────────────────────────────── */
+.task-list {
+    min-height: 60px;
+    border-radius: 8px;
+    padding: 4px 0;
+}
+
+/* ── Task Card ───────────────────────────────────────── */
+.task {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 6px 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+    cursor: grab;
+    position: relative;
+    transition: box-shadow .2s, transform .15s;
+}
+
+.task:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .13);
+    transform: translateY(-2px);
+}
+
+.task h4 {
+    font-size: .9rem;
+    margin-bottom: 4px;
+    padding-right: 20px;
+}
+
+.task-assignee {
+    font-size: .78rem;
+    color: #888;
+}
+
+.task-priority {
+    display: inline-block;
+    font-size: .68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.task-priority.high {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.task-priority.medium {
+    background: #fff8e1;
+    color: #f57f17;
+}
+
+.task-priority.low {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.task-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: #ccc;
+    font-size: .8rem;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    transition: color .2s, background .2s;
+}
+
+.task-delete-btn:hover {
+    color: #e53935;
+    background: #ffebee;
+}
+
+/* ── Login Page ──────────────────────────────────────── */
+.login-container {
+    width: 340px;
+    margin: 80px auto;
+    background: #fff;
+    padding: 32px;
+    border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .1);
+    text-align: center;
+}
+
+.login-container h2 {
+    margin-bottom: 20px;
+    color: #1a1a2e;
+    font-size: 1.4rem;
+}
+
+.login-container input {
+    width: 100%;
+    margin: 6px 0;
+    padding: 10px 12px;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    font-size: .9rem;
+    outline: none;
+    transition: border-color .2s;
+}
+
+.login-container input:focus {
+    border-color: #5c6bc0;
+}
+
+.login-container button {
+    margin-top: 14px;
+    width: 100%;
+    padding: 11px;
+    background: #5c6bc0;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s;
+}
+
+.login-container button:hover {
+    background: #3949ab;
+}
+
+.error {
+    color: #e53935;
+    font-size: .85rem;
+    margin-top: 8px;
+    min-height: 18px;
+}
+
+.hint {
+    margin-top: 16px;
+    font-size: .78rem;
+    color: #aaa;
+    line-height: 1.7;
+}
+
+/* ── Modals ──────────────────────────────────────────── */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 28px;
+    width: 340px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .2);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.modal-content h3 {
+    font-size: 1.1rem;
+    color: #1a1a2e;
+}
+
+.modal-content input,
+.modal-content select {
+    padding: 9px 12px;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    font-size: .9rem;
+    outline: none;
+    transition: border-color .2s;
+}
+
+.modal-content input:focus,
+.modal-content select:focus {
+    border-color: #5c6bc0;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.modal-actions button {
+    flex: 1;
+}
