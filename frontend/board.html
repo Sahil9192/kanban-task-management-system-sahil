@@ -3,59 +3,1286 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Kanban Board</title>
-    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KanbanAI — Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <style>
+        /* ── Design Tokens ───────────────────────────── */
+        :root {
+            --bg-deep: #07090f;
+            --bg-mid: #0d1117;
+            --glass: rgba(255, 255, 255, 0.04);
+            --glass-border: rgba(255, 255, 255, 0.09);
+            --glass-strong: rgba(255, 255, 255, 0.07);
+
+            --blue: #3b82f6;
+            --blue-glow: rgba(59, 130, 246, 0.3);
+            --blue-dark: #1d4ed8;
+            --violet: #8b5cf6;
+            --violet-glow: rgba(139, 92, 246, 0.25);
+
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #475569;
+
+            --danger: #f87171;
+            --danger-bg: rgba(248, 113, 113, 0.12);
+            --success: #34d399;
+            --warning: #fbbf24;
+
+            --col-radius: 16px;
+            --card-radius: 12px;
+            --btn-radius: 10px;
+            --input-radius: 10px;
+            --transition: cubic-bezier(0.4, 0, 0.2, 1);
+
+            --header-h: 64px;
+        }
+
+        /* ── Reset ───────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: auto;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Background ──────────────────────────────── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+            background-size: 48px 48px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(30, 58, 138, 0.18) 0%, transparent 65%);
+            top: -150px;
+            left: -150px;
+            pointer-events: none;
+            z-index: 0;
+            border-radius: 50%;
+        }
+
+        /* ── Header ──────────────────────────────────── */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            height: var(--header-h);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(7, 9, 15, 0.88);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        /* Brand in header */
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            flex-shrink: 0;
+            text-decoration: none;
+        }
+
+        .header-brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--blue), var(--violet));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            box-shadow: 0 0 14px var(--blue-glow);
+        }
+
+        .header-brand-name {
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            color: var(--text-primary);
+        }
+
+        /* Search */
+        .header-search {
+            flex: 1;
+            max-width: 320px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .header-search .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .header-search input {
+            width: 100%;
+            padding: 8px 14px 8px 36px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+
+        .header-search input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .header-search input:focus {
+            border-color: var(--blue);
+            background: rgba(59, 130, 246, 0.06);
+            box-shadow: 0 0 0 3px var(--blue-glow);
+        }
+
+        /* Header right side */
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        /* WS Badge */
+        .ws-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            transition: all 0.4s;
+        }
+
+        .ws-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .ws-badge.online {
+            background: rgba(52, 211, 153, 0.12);
+            color: var(--success);
+            border: 1px solid rgba(52, 211, 153, 0.25);
+        }
+
+        .ws-badge.online::before {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+            animation: pulse-dot 2s infinite;
+        }
+
+        .ws-badge.offline {
+            background: rgba(71, 85, 105, 0.2);
+            color: var(--text-muted);
+            border: 1px solid var(--glass-border);
+        }
+
+        .ws-badge.offline::before {
+            background: var(--text-muted);
+        }
+
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* User avatar + name */
+        .user-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 10px 4px 4px;
+            border-radius: 24px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+        }
+
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--blue), var(--violet));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .user-name {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Logout button */
+        .btn-logout {
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            border-radius: var(--btn-radius);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn-logout:hover {
+            background: var(--danger-bg);
+            border-color: rgba(248, 113, 113, 0.35);
+            color: var(--danger);
+        }
+
+        /* ── Toolbar ──────────────────────────────────── */
+        .toolbar {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 24px 0;
+        }
+
+        /* Task count badge */
+        .toolbar-stat {
+            margin-left: auto;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* ── Buttons ──────────────────────────────────── */
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, var(--blue), var(--violet));
+            color: #fff;
+            border: none;
+            border-radius: var(--btn-radius);
+            font-size: 0.84rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 4px 14px var(--blue-glow);
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.2px;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px var(--blue-glow);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--btn-radius);
+            font-size: 0.84rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn-secondary:hover {
+            background: var(--glass-strong);
+            border-color: rgba(255, 255, 255, 0.18);
+            color: var(--text-primary);
+        }
+
+        /* ── Board ────────────────────────────────────── */
+        .board {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            gap: 16px;
+            padding: 20px 24px 40px;
+            overflow-x: auto;
+            min-height: calc(100vh - var(--header-h) - 64px);
+            align-items: flex-start;
+        }
+
+        .board::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .board::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .board::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Empty state */
+        .board-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 300px;
+            gap: 12px;
+            color: var(--text-muted);
+        }
+
+        .board-empty .empty-icon {
+            font-size: 48px;
+            opacity: 0.4;
+        }
+
+        .board-empty p {
+            font-size: 0.9rem;
+        }
+
+        /* ── Column ───────────────────────────────────── */
+        .column {
+            flex-shrink: 0;
+            width: 300px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--col-radius);
+            padding: 0;
+            transition: box-shadow 0.2s, transform 0.2s;
+            cursor: grab;
+            overflow: hidden;
+        }
+
+        .column:hover {
+            border-color: rgba(255, 255, 255, 0.14);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .column.dragging {
+            opacity: 0.5;
+            transform: scale(0.97) rotate(-1deg);
+            cursor: grabbing;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .column.drag-target {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 2px var(--blue-glow);
+        }
+
+        /* Column header */
+        .column-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px 12px;
+            border-bottom: 1px solid var(--glass-border);
+            user-select: none;
+            cursor: grab;
+        }
+
+        .col-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .col-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .col-title {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.2px;
+        }
+
+        .col-count {
+            font-size: 0.72rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            padding: 2px 7px;
+            border-radius: 10px;
+        }
+
+        .col-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .col-delete-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            cursor: pointer;
+            padding: 4px 7px;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+            line-height: 1;
+        }
+
+        .col-delete-btn:hover {
+            color: var(--danger);
+            background: var(--danger-bg);
+        }
+
+        /* ── Task List ────────────────────────────────── */
+        .task-list {
+            min-height: 80px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .task-list.drag-over {
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 8px;
+        }
+
+        /* ── Task Card ────────────────────────────────── */
+        .task {
+            background: rgba(15, 20, 35, 0.7);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--card-radius);
+            padding: 12px 14px;
+            cursor: grab;
+            position: relative;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+        }
+
+        .task:hover {
+            border-color: rgba(255, 255, 255, 0.16);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .task.dragging {
+            opacity: 0.45;
+            cursor: grabbing;
+        }
+
+        .task h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding-right: 22px;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+
+        .task-desc {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .task-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        /* Priority badges */
+        .task-priority {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .task-priority.high {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .task-priority.medium {
+            background: rgba(251, 191, 36, 0.12);
+            color: #fde68a;
+            border: 1px solid rgba(251, 191, 36, 0.25);
+        }
+
+        .task-priority.low {
+            background: rgba(34, 197, 94, 0.12);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .task-date {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* Overdue */
+        .task-date.overdue {
+            color: var(--danger);
+        }
+
+        .task-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 8px;
+        }
+
+        .task-assignee {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .assignee-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 700;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .task-delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: transparent;
+            border: none;
+            color: transparent;
+            font-size: 0.75rem;
+            cursor: pointer;
+            padding: 3px 5px;
+            border-radius: 5px;
+            transition: color 0.15s, background 0.15s;
+            line-height: 1;
+        }
+
+        .task:hover .task-delete-btn {
+            color: var(--text-muted);
+        }
+
+        .task-delete-btn:hover {
+            color: var(--danger) !important;
+            background: var(--danger-bg);
+        }
+
+        /* ── Toast Popup ──────────────────────────────── */
+        #toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            max-width: 320px;
+            min-width: 240px;
+            pointer-events: all;
+            animation: toastIn 0.3s var(--transition) both;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .toast.removing {
+            animation: toastOut 0.3s var(--transition) both;
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateX(50px) scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        @keyframes toastOut {
+            from {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateX(50px) scale(0.9);
+            }
+        }
+
+        .toast.error {
+            background: rgba(20, 5, 5, 0.9);
+            border-color: rgba(248, 113, 113, 0.3);
+        }
+
+        .toast.success {
+            background: rgba(5, 20, 12, 0.9);
+            border-color: rgba(52, 211, 153, 0.3);
+        }
+
+        .toast.info {
+            background: rgba(5, 10, 25, 0.9);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .toast-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .toast-body {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-size: 0.84rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .toast.error .toast-title {
+            color: var(--danger);
+        }
+
+        .toast.success .toast-title {
+            color: var(--success);
+        }
+
+        .toast.info .toast-title {
+            color: var(--blue);
+        }
+
+        .toast-msg {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            padding: 0;
+            transition: color 0.2s;
+            flex-shrink: 0;
+        }
+
+        .toast-close:hover {
+            color: var(--text-primary);
+        }
+
+        /* ── Modals ───────────────────────────────────── */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 500;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            animation: fadeIn 0.2s ease both;
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-content {
+            background: #0e121c;
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 28px;
+            width: 420px;
+            max-width: 95vw;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            animation: slideUp 0.25s var(--transition) both;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 22px;
+        }
+
+        .modal-header h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+            background: var(--glass-strong);
+        }
+
+        /* Form groups */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        .form-group:last-of-type {
+            margin-bottom: 0;
+        }
+
+        .form-group label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--input-radius);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            width: 100%;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: var(--blue);
+            background: rgba(59, 130, 246, 0.05);
+            box-shadow: 0 0 0 3px var(--blue-glow);
+        }
+
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        /* Select dark styling */
+        .form-group select {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        .form-group select option {
+            background: #0e121c;
+            color: var(--text-primary);
+        }
+
+        /* Input date dark */
+        .form-group input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(0.5);
+            cursor: pointer;
+        }
+
+        /* Form row */
+        .form-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        /* Modal actions */
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        .modal-actions .btn-primary,
+        .modal-actions .btn-secondary {
+            flex: 1;
+            justify-content: center;
+            padding: 10px;
+            font-size: 0.875rem;
+        }
+
+        /* ── Confirm Dialog overlay ────────────────────── */
+        #confirm-modal .modal-content {
+            width: 360px;
+            text-align: center;
+        }
+
+        #confirm-modal .confirm-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+        }
+
+        #confirm-modal h3 {
+            margin-bottom: 8px;
+        }
+
+        #confirm-modal p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0;
+        }
+
+        .btn-danger {
+            flex: 1;
+            justify-content: center;
+            padding: 10px;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+            border-radius: var(--btn-radius);
+            font-weight: 700;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        /* Column color dots */
+        .dot-blue {
+            background: #3b82f6;
+        }
+
+        .dot-violet {
+            background: #8b5cf6;
+        }
+
+        .dot-green {
+            background: #22c55e;
+        }
+
+        .dot-amber {
+            background: #f59e0b;
+        }
+
+        .dot-rose {
+            background: #f43f5e;
+        }
+
+        .dot-cyan {
+            background: #06b6d4;
+        }
+
+        .dot-gray {
+            background: #6b7280;
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Loading overlay for board */
+        #board-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            padding: 80px 0;
+            width: 100%;
+        }
+    </style>
 </head>
 
 <body>
 
+    <!-- ── Toast Container ───────────────────────── -->
+    <div id="toast-container"></div>
+
+    <!-- ── Header ────────────────────────────────── -->
     <header>
-        <h2>Kanban Board</h2>
-        <input type="text" id="search" placeholder="Search tasks..." oninput="renderBoard()" />
-        <span id="ws-status" class="ws-badge offline" title="Real-time sync">● Live</span>
-        <button onclick="logout()">Logout</button>
+        <a class="header-brand" href="#">
+            <div class="header-brand-icon">⚡</div>
+            <span class="header-brand-name">KanbanAI</span>
+        </a>
+
+        <div class="header-search">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="search" placeholder="Search tasks…" oninput="renderBoard()" />
+        </div>
+
+        <div class="header-right">
+            <span id="ws-status" class="ws-badge offline" title="Real-time sync status">Offline</span>
+
+            <div class="user-pill">
+                <div class="user-avatar" id="user-avatar-initials">?</div>
+                <span class="user-name" id="user-name-display">Loading…</span>
+            </div>
+
+            <button class="btn-logout" onclick="logout()">Sign Out</button>
+        </div>
     </header>
 
+    <!-- ── Toolbar ────────────────────────────────── -->
     <div class="toolbar">
-        <button class="btn-primary" onclick="showAddTask()">+ Add Task</button>
-        <button class="btn-secondary" onclick="showAddColumn()">+ Add Column</button>
+        <button class="btn-primary" onclick="showAddTask()">
+            ＋ &nbsp;New Task
+        </button>
+        <button class="btn-secondary" onclick="showAddColumn()">
+            ＋ &nbsp;Add Column
+        </button>
+        <span class="toolbar-stat" id="task-count-display"></span>
     </div>
 
-    <!-- Column Board — populated dynamically by app.js -->
-    <div class="board" id="board"></div>
+    <!-- ── Board Area ──────────────────────────────── -->
+    <div class="board" id="board">
+        <div id="board-loading">
+            <span class="spinner"></span> Loading your board…
+        </div>
+    </div>
 
-    <!-- ── Add Task Modal ───────────────────────────────── -->
+    <!-- ── Add Task Modal ─────────────────────────── -->
     <div id="task-modal" class="modal hidden">
         <div class="modal-content">
-            <h3>Add Task</h3>
-            <input id="task-title" placeholder="Title" />
-            <select id="task-priority">
-                <option>High</option>
-                <option selected>Medium</option>
-                <option>Low</option>
-            </select>
-            <input id="task-assignee" placeholder="Assignee" />
-            <select id="task-column-select"></select>
+            <div class="modal-header">
+                <h3>✨ New Task</h3>
+                <button class="modal-close" onclick="closeTaskModal()" title="Close">✕</button>
+            </div>
+
+            <div class="form-group">
+                <label>Title *</label>
+                <input id="task-title" placeholder="What needs to be done?" />
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="task-desc" placeholder="Add more details…"></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select id="task-priority">
+                        <option value="High">🔴 High</option>
+                        <option value="Medium" selected>🟡 Medium</option>
+                        <option value="Low">🟢 Low</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Due Date</label>
+                    <input type="date" id="task-date" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Assignee</label>
+                    <input id="task-assignee" placeholder="e.g. Alice" />
+                </div>
+                <div class="form-group">
+                    <label>Column</label>
+                    <select id="task-column-select"></select>
+                </div>
+            </div>
+
             <div class="modal-actions">
-                <button class="btn-primary" onclick="createTask()">Create</button>
                 <button class="btn-secondary" onclick="closeTaskModal()">Cancel</button>
+                <button class="btn-primary" onclick="createTask()">Create Task</button>
             </div>
         </div>
     </div>
 
-    <!-- ── Add Column Modal ─────────────────────────────── -->
+    <!-- ── Add Column Modal ───────────────────────── -->
     <div id="col-modal" class="modal hidden">
-        <div class="modal-content">
-            <h3>New Column</h3>
-            <input id="col-name" placeholder="Column name" />
+        <div class="modal-content" style="width:360px;">
+            <div class="modal-header">
+                <h3>📋 New Column</h3>
+                <button class="modal-close" onclick="closeColModal()" title="Close">✕</button>
+            </div>
+
+            <div class="form-group">
+                <label>Column Name *</label>
+                <input id="col-name" placeholder="e.g. Backlog, QA, Blocked…"
+                    onkeydown="if(event.key==='Enter') createColumn()" />
+            </div>
+
             <div class="modal-actions">
-                <button class="btn-primary" onclick="createColumn()">Create</button>
                 <button class="btn-secondary" onclick="closeColModal()">Cancel</button>
+                <button class="btn-primary" onclick="createColumn()">Create Column</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Confirm Delete Modal ───────────────────── -->
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header" style="border:none;margin-bottom:0;">
+                <span></span>
+                <button class="modal-close" onclick="closeConfirm()" title="Close">✕</button>
+            </div>
+            <div class="confirm-icon" id="confirm-icon">🗑️</div>
+            <h3 id="confirm-title">Delete?</h3>
+            <p id="confirm-message">This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeConfirm()">Cancel</button>
+                <button class="btn-danger" id="confirm-ok-btn">Delete</button>
             </div>
         </div>
     </div>
 
     <script src="app.js"></script>
+
+    <script>
+        /* ── Toast System ────────────────────────────── */
+        window.showToast = function (type, title, message, duration = 4000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icons = { error: '❌', success: '✅', info: 'ℹ️' };
+            toast.innerHTML = `
+                <div class="toast-icon">${icons[type] || 'ℹ️'}</div>
+                <div class="toast-body">
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-msg">${message}</div>
+                </div>
+                <button class="toast-close" onclick="removeToast(this.parentElement)">✕</button>
+            `;
+            container.appendChild(toast);
+            if (duration > 0) setTimeout(() => removeToast(toast), duration);
+        };
+
+        window.removeToast = function (toast) {
+            if (!toast || toast.classList.contains('removing')) return;
+            toast.classList.add('removing');
+            toast.addEventListener('animationend', () => toast.remove(), { once: true });
+        };
+
+        /* ── Confirm Dialog ──────────────────────────── */
+        let _confirmCallback = null;
+
+        window.showConfirm = function (icon, title, message, onConfirm) {
+            document.getElementById('confirm-icon').textContent = icon;
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            _confirmCallback = onConfirm;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        };
+
+        window.closeConfirm = function () {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            _confirmCallback = null;
+        };
+
+        document.getElementById('confirm-ok-btn').onclick = function () {
+            if (_confirmCallback) _confirmCallback();
+            closeConfirm();
+        };
+
+        /* ── Close modals on backdrop click ──────────── */
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', function (e) {
+                if (e.target === this) {
+                    this.classList.add('hidden');
+                    _confirmCallback = null;
+                }
+            });
+        });
+
+        /* ── Close modals on Escape ───────────────────── */
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal:not(.hidden)').forEach(m => {
+                    m.classList.add('hidden');
+                });
+                _confirmCallback = null;
+            }
+        });
+
+        /* ── User Avatar Initials ─────────────────────── */
+        function setAvatarInitials(name) {
+            const av = document.getElementById('user-avatar-initials');
+            if (!name || name === 'User') { av.textContent = '👤'; return; }
+            const parts = name.trim().split(' ');
+            av.textContent = parts.map(p => p[0]).slice(0, 2).join('').toUpperCase();
+        }
+
+        // Patch initBoard to set avatar
+        const _origInit = window.initBoard;
+        window.initBoard = function () {
+            const name = localStorage.getItem('kanban_user_name') || 'User';
+            setAvatarInitials(name);
+            if (_origInit) _origInit();
+        };
+    </script>
+
 </body>
 
 </html>

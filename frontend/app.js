@@ -1,99 +1,156 @@
+/* ═══════════════════════════════════════════════════════════
+   KanbanAI — app.js
+   Handles: Auth guard, WebSocket, Columns, Tasks, Drag & Drop
+   Integrates: toast popups, confirm dialog, overdue detection
+═══════════════════════════════════════════════════════════ */
+
 const API = "http://127.0.0.1:8000";
-const WS = "ws://127.0.0.1:8000/ws";
+const WS_URL = "ws://127.0.0.1:8000/ws";
 
 let tasks = [];
 let columns = [];
 let draggedTaskId = null;
-let draggedColId = null;   // for column drag-and-drop
+let draggedColId = null;
 let ws = null;
 
-/* ═══════════════════════════════════════════════════════════
-   HARDCODED AUTH
-═══════════════════════════════════════════════════════════ */
-const VALID_USERS = {
-    "admin@kanban.com": "admin123",
-    "user@kanban.com": "user123"
-};
-
-/* ── Page bootstrap ─────────────────────────────────────── */
-if (location.pathname.includes("board")) {
-    if (!localStorage.getItem("kanban_token")) {
-        location.href = "/static/login.html";
-    } else {
-        initBoard();
-    }
-}
-
-if (location.pathname.includes("login")) {
-    if (localStorage.getItem("kanban_token")) {
-        location.href = "/static/board.html";
-    }
-}
+/* ── Column dot colors (cycles) ───────────────────────── */
+const COL_DOTS = ['dot-blue', 'dot-violet', 'dot-green', 'dot-amber', 'dot-rose', 'dot-cyan', 'dot-gray'];
 
 /* ═══════════════════════════════════════════════════════════
-   AUTH
+   PAGE BOOTSTRAP
 ═══════════════════════════════════════════════════════════ */
-function login() {
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-    const errorEl = document.getElementById("error");
+(function bootstrap() {
+    const isBoard = location.pathname.includes("board");
+    const isLogin = location.pathname.includes("login");
+    const token = localStorage.getItem("kanban_token");
 
-    if (!email || !password) {
-        errorEl.innerText = "Please enter email and password.";
-        return;
+    if (isBoard) {
+        if (!token) {
+            location.href = "/static/login.html";
+        } else {
+            initBoard();
+        }
     }
-    if (VALID_USERS[email] && VALID_USERS[email] === password) {
-        localStorage.setItem("kanban_token", btoa(email));
-        localStorage.setItem("kanban_user", email);
+
+    if (isLogin && token) {
         location.href = "/static/board.html";
-    } else {
-        errorEl.innerText = "Invalid email or password.";
     }
+})();
+
+/* ── Auth header helper ───────────────────────────────── */
+function getAuthHeaders() {
+    const token = localStorage.getItem("kanban_token");
+    return {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+    };
 }
 
+/* ── Logout ───────────────────────────────────────────── */
 function logout() {
-    if (ws) ws.close();
+    if (ws) { try { ws.close(); } catch (e) { } }
     localStorage.removeItem("kanban_token");
-    localStorage.removeItem("kanban_user");
+    localStorage.removeItem("kanban_user_name");
     location.href = "/static/login.html";
 }
 
-/* ═══════════════════════════════════════════════════════════
-   WEBSOCKET  — real-time sync
-═══════════════════════════════════════════════════════════ */
-function connectWS() {
-    ws = new WebSocket(WS);
+/* ─────────── Safe fallbacks if toast not yet defined ─── */
+function _toast(type, title, msg, dur) {
+    if (typeof window.showToast === 'function') {
+        window.showToast(type, title, msg, dur);
+    } else {
+        console.warn(`[${type}] ${title}: ${msg}`);
+    }
+}
 
-    ws.onopen = () => {
-        const badge = document.getElementById("ws-status");
-        if (badge) { badge.classList.replace("offline", "online"); }
-    };
-
-    ws.onmessage = (evt) => {
-        const msg = JSON.parse(evt.data);
-        if (msg.type === "columns_changed") {
-            loadColumns();          // re-fetch columns + tasks
-        } else if (msg.type === "tasks_changed") {
-            loadTasks();            // only re-fetch tasks
-        }
-    };
-
-    ws.onclose = () => {
-        const badge = document.getElementById("ws-status");
-        if (badge) { badge.classList.replace("online", "offline"); }
-        // Auto-reconnect after 3 s
-        setTimeout(connectWS, 3000);
-    };
-
-    ws.onerror = () => ws.close();
+function _confirm(icon, title, msg, cb) {
+    if (typeof window.showConfirm === 'function') {
+        window.showConfirm(icon, title, msg, cb);
+    } else if (window.confirm(msg)) {
+        cb();
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════
    BOARD INIT
 ═══════════════════════════════════════════════════════════ */
 async function initBoard() {
-    await loadColumns();   // also calls loadTasks() once columns are ready
+    // Set user name + avatar
+    const storedName = localStorage.getItem("kanban_user_name") || "User";
+    const nameEl = document.getElementById("user-name-display");
+    if (nameEl) nameEl.textContent = storedName;
+
+    // Set avatar initials
+    if (typeof setAvatarInitials === 'function') setAvatarInitials(storedName);
+
+    // Verify token is still valid with backend
+    try {
+        const meRes = await fetch(`${API}/auth/me`, {
+            headers: getAuthHeaders()
+        });
+        if (meRes.status === 401) {
+            logout();
+            return;
+        }
+        if (meRes.ok) {
+            const me = await meRes.json();
+            const newName = me.full_name || me.email || storedName;
+            localStorage.setItem("kanban_user_name", newName);
+            if (nameEl) nameEl.textContent = newName;
+            if (typeof setAvatarInitials === 'function') setAvatarInitials(newName);
+        }
+    } catch (e) {
+        // Server might be down — continue with cached data
+        _toast('info', 'Offline Mode', 'Could not verify session. Some features may be limited.', 5000);
+    }
+
+    await loadColumns();
     connectWS();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WEBSOCKET — real-time sync
+═══════════════════════════════════════════════════════════ */
+function connectWS() {
+    try {
+        ws = new WebSocket(WS_URL);
+    } catch (e) {
+        setBadge(false);
+        return;
+    }
+
+    ws.onopen = () => setBadge(true);
+
+    ws.onmessage = (evt) => {
+        try {
+            const msg = JSON.parse(evt.data);
+            if (msg.type === "columns_changed") {
+                loadColumns();
+            } else if (msg.type === "tasks_changed") {
+                loadTasks();
+            }
+        } catch (e) {
+            console.warn("WS parse error:", e);
+        }
+    };
+
+    ws.onerror = () => { };
+    ws.onclose = () => {
+        setBadge(false);
+        setTimeout(connectWS, 3000);
+    };
+}
+
+function setBadge(online) {
+    const badge = document.getElementById("ws-status");
+    if (!badge) return;
+    if (online) {
+        badge.className = "ws-badge online";
+        badge.textContent = "Live";
+    } else {
+        badge.className = "ws-badge offline";
+        badge.textContent = "Offline";
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -101,73 +158,328 @@ async function initBoard() {
 ═══════════════════════════════════════════════════════════ */
 async function loadColumns() {
     try {
-        const res = await fetch(`${API}/columns/`);
+        const res = await fetch(`${API}/columns/`, { headers: getAuthHeaders() });
+        if (res.status === 401) { logout(); return; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         columns = await res.json();
-        await loadTasks();      // tasks depend on columns being known
+        await loadTasks();
     } catch (err) {
         console.error("Failed to load columns:", err);
+        _toast('error', 'Load Error', 'Could not load columns. Please refresh.', 6000);
+        // Hide loading spinner
+        const loading = document.getElementById('board-loading');
+        if (loading) loading.remove();
     }
 }
 
+async function createColumn() {
+    const nameInput = document.getElementById("col-name");
+    const name = nameInput ? nameInput.value.trim() : "";
+
+    if (!name) {
+        _toast('error', 'Validation Error', 'Column name cannot be empty.');
+        nameInput && nameInput.focus();
+        return;
+    }
+
+    if (name.length > 40) {
+        _toast('error', 'Validation Error', 'Column name must be 40 characters or less.');
+        return;
+    }
+
+    // Duplicate check
+    if (columns.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+        _toast('error', 'Duplicate Column', `A column named "${name}" already exists.`);
+        return;
+    }
+
+    const btn = document.querySelector('#col-modal .btn-primary');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating…'; }
+
+    try {
+        const res = await fetch(`${API}/columns/`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ name })
+        });
+        if (res.status === 401) { logout(); return; }
+        if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            throw new Error(d.detail || `HTTP ${res.status}`);
+        }
+        const newCol = await res.json();
+        columns.push(newCol);
+        closeColModal();
+        renderBoard();
+        _toast('success', 'Column Created', `"${name}" column is ready.`);
+    } catch (err) {
+        _toast('error', 'Create Failed', err.message || 'Could not create column.');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Create Column'; }
+    }
+}
+
+async function deleteColumn(colId) {
+    const col = columns.find(c => c.id === colId);
+    const colName = col ? col.name : 'this column';
+    const taskCount = tasks.filter(t => t.status === colId).length;
+    const extra = taskCount > 0
+        ? `${taskCount} task(s) will move to the first remaining column.`
+        : 'This action cannot be undone.';
+
+    _confirm('🗑️', `Delete "${colName}"?`, extra, async () => {
+        try {
+            const res = await fetch(`${API}/columns/${colId}`, {
+                method: "DELETE",
+                headers: getAuthHeaders()
+            });
+            if (res.status === 401) { logout(); return; }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            columns = columns.filter(c => c.id !== colId);
+            await loadTasks();
+            renderBoard();
+            _toast('success', 'Column Deleted', `"${colName}" has been removed.`);
+        } catch (err) {
+            _toast('error', 'Delete Failed', 'Could not delete column. Please try again.');
+        }
+    });
+}
+
+async function reorderColumns(orderedIds) {
+    try {
+        const res = await fetch(`${API}/columns/reorder`, {
+            method: "PUT",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ ordered_ids: orderedIds })
+        });
+        if (res.status === 401) { logout(); return; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+        _toast('error', 'Reorder Failed', 'Could not save column order.');
+        // Reload to restore correct order
+        await loadColumns();
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TASKS
+═══════════════════════════════════════════════════════════ */
+async function loadTasks() {
+    try {
+        const res = await fetch(`${API}/tasks/`, { headers: getAuthHeaders() });
+        if (res.status === 401) { logout(); return; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        tasks = await res.json();
+        renderBoard();
+    } catch (err) {
+        console.error("Failed to load tasks:", err);
+        _toast('error', 'Load Error', 'Could not load tasks. Please refresh.', 6000);
+    }
+}
+
+async function createTask() {
+    const titleVal = document.getElementById("task-title")?.value.trim();
+    const descVal = document.getElementById("task-desc")?.value.trim();
+    const priorityVal = document.getElementById("task-priority")?.value;
+    const assigneeVal = document.getElementById("task-assignee")?.value.trim();
+    const dueVal = document.getElementById("task-date")?.value;
+    const statusVal = document.getElementById("task-column-select")?.value;
+
+    if (!titleVal) {
+        _toast('error', 'Validation Error', 'Task title is required.');
+        document.getElementById("task-title")?.focus();
+        return;
+    }
+
+    if (titleVal.length > 120) {
+        _toast('error', 'Validation Error', 'Title must be 120 characters or less.');
+        return;
+    }
+
+    if (!statusVal) {
+        _toast('error', 'Validation Error', 'Please select a column for this task.');
+        return;
+    }
+
+    const btn = document.querySelector('#task-modal .btn-primary');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating…'; }
+
+    try {
+        const res = await fetch(`${API}/tasks/`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                title: titleVal,
+                description: descVal || null,
+                priority: priorityVal || "Medium",
+                assignee: assigneeVal || null,
+                status: statusVal,
+                due_date: dueVal ? new Date(dueVal).toISOString() : null
+            })
+        });
+        if (res.status === 401) { logout(); return; }
+        if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            throw new Error(d.detail || `HTTP ${res.status}`);
+        }
+        const newTask = await res.json();
+        tasks.push(newTask);
+        closeTaskModal();
+        renderBoard();
+        _toast('success', 'Task Created', `"${titleVal}" added to ${columns.find(c => c.id === statusVal)?.name || 'board'}.`);
+    } catch (err) {
+        _toast('error', 'Create Failed', err.message || 'Could not create task.');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Create Task'; }
+    }
+}
+
+async function updateTaskStatus(taskId, newStatus) {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const prev = task.status;
+    task.status = newStatus;
+    renderBoard(); // optimistic update
+
+    try {
+        const res = await fetch(`${API}/tasks/${taskId}`, {
+            method: "PUT",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ ...task })
+        });
+        if (res.status === 401) { logout(); return; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+        // Rollback
+        task.status = prev;
+        renderBoard();
+        _toast('error', 'Move Failed', 'Could not move task. Please try again.');
+    }
+}
+
+async function deleteTask(id) {
+    const task = tasks.find(t => t.id === id);
+    const taskName = task ? task.title : 'this task';
+
+    _confirm('🗑️', `Delete task?`, `"${taskName}" will be permanently removed.`, async () => {
+        try {
+            const res = await fetch(`${API}/tasks/${id}`, {
+                method: "DELETE",
+                headers: getAuthHeaders()
+            });
+            if (res.status === 401) { logout(); return; }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            tasks = tasks.filter(t => t.id !== id);
+            renderBoard();
+            _toast('success', 'Task Deleted', `"${taskName}" has been removed.`);
+        } catch (err) {
+            _toast('error', 'Delete Failed', 'Could not delete task. Please try again.');
+        }
+    });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BOARD RENDER
+═══════════════════════════════════════════════════════════ */
 function renderBoard() {
     const board = document.getElementById("board");
+    if (!board) return;
+
+    // Remove loading spinner
+    const loading = document.getElementById('board-loading');
+    if (loading) loading.remove();
+
     board.innerHTML = "";
 
-    const search = (document.getElementById("search")?.value || "").toLowerCase();
+    const search = (document.getElementById("search")?.value || "").toLowerCase().trim();
 
-    columns.forEach(col => {
-        /* ── column wrapper ── */
+    // Update task count in toolbar
+    const countEl = document.getElementById("task-count-display");
+    if (countEl) {
+        const visible = search
+            ? tasks.filter(t => t.title.toLowerCase().includes(search)).length
+            : tasks.length;
+        countEl.textContent = `${visible} task${visible !== 1 ? 's' : ''}`;
+    }
+
+    if (columns.length === 0) {
+        board.innerHTML = `<div class="board-empty">
+            <div class="empty-icon">📋</div>
+            <p>No columns yet. Click <strong>Add Column</strong> to get started.</p>
+        </div>`;
+        return;
+    }
+
+    columns.forEach((col, idx) => {
+        const filtered = tasks.filter(t =>
+            t.status === col.id &&
+            (!search || t.title.toLowerCase().includes(search) ||
+                (t.assignee || '').toLowerCase().includes(search) ||
+                (t.description || '').toLowerCase().includes(search))
+        );
+
+        const dotClass = COL_DOTS[idx % COL_DOTS.length];
+
         const colEl = document.createElement("div");
         colEl.className = "column";
         colEl.dataset.colId = col.id;
         colEl.draggable = true;
 
-        /* column-level drag events */
         colEl.addEventListener("dragstart", onColDragStart);
         colEl.addEventListener("dragover", onColDragOver);
         colEl.addEventListener("drop", onColDrop);
+        colEl.addEventListener("dragend", onColDragEnd);
 
-        /* ── column header ── */
         const header = document.createElement("div");
         header.className = "column-header";
         header.innerHTML = `
-      <span class="col-title">${col.name}</span>
-      <button class="col-delete-btn" onclick="deleteColumn('${col.id}')" title="Delete column">✕</button>
-    `;
+            <div class="col-title-wrap">
+                <div class="col-dot ${dotClass}"></div>
+                <span class="col-title">${escHtml(col.name)}</span>
+                <span class="col-count">${filtered.length}</span>
+            </div>
+            <div class="col-actions">
+                <button class="col-delete-btn" onclick="deleteColumn('${col.id}')" title="Delete column">✕</button>
+            </div>
+        `;
         colEl.appendChild(header);
 
-        /* ── task list ── */
         const taskList = document.createElement("div");
         taskList.className = "task-list";
         taskList.id = `col-${col.id}`;
         taskList.dataset.status = col.id;
 
-        /* task drop zone */
         taskList.addEventListener("dragover", onTaskDragOver);
+        taskList.addEventListener("dragleave", onTaskDragLeave);
         taskList.addEventListener("drop", onTaskDrop);
 
-        const filtered = tasks.filter(t =>
-            t.status === col.id && t.title.toLowerCase().includes(search)
-        );
-
         filtered.forEach(task => {
-            const taskEl = buildTaskEl(task);
-            taskList.appendChild(taskEl);
+            taskList.appendChild(buildTaskEl(task));
         });
+
+        // Empty column placeholder
+        if (filtered.length === 0 && !search) {
+            const ph = document.createElement("div");
+            ph.style.cssText = "padding:20px 10px;text-align:center;color:var(--text-muted);font-size:0.78rem;";
+            ph.textContent = "Drop tasks here";
+            taskList.appendChild(ph);
+        }
 
         colEl.appendChild(taskList);
         board.appendChild(colEl);
     });
 
-    /* populate column selector in Add Task modal */
+    // Populate column selector in modal
     const sel = document.getElementById("task-column-select");
     if (sel) {
         sel.innerHTML = columns.map(c =>
-            `<option value="${c.id}">${c.name}</option>`
+            `<option value="${c.id}">${escHtml(c.name)}</option>`
         ).join("");
     }
 }
 
+/* ── Build Task Element ───────────────────────────────── */
 function buildTaskEl(task) {
     const el = document.createElement("div");
     el.className = "task";
@@ -176,206 +488,183 @@ function buildTaskEl(task) {
 
     el.addEventListener("dragstart", (e) => {
         draggedTaskId = task.id;
-        e.stopPropagation();   // prevent column drag from firing
+        draggedColId = null;
+        el.classList.add("dragging");
+        e.stopPropagation();
     });
 
-    const priorityClass = task.priority?.toLowerCase() || "medium";
+    el.addEventListener("dragend", () => {
+        el.classList.remove("dragging");
+        draggedTaskId = null;
+    });
+
+    const priorityClass = (task.priority || "Medium").toLowerCase();
+
+    // Date + overdue logic
+    let dateHtml = "";
+    if (task.due_date) {
+        const d = new Date(task.due_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isOverdue = d < today && task.status !== 'done';
+        const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        dateHtml = `<span class="task-date${isOverdue ? ' overdue' : ''}">
+            ${isOverdue ? '⚠️' : '📅'} ${formatted}
+        </span>`;
+    }
+
+    const descHtml = task.description
+        ? `<p class="task-desc">${escHtml(task.description)}</p>`
+        : "";
+
+    // Assignee avatar
+    let assigneeHtml = "";
+    if (task.assignee) {
+        const initials = task.assignee.trim().split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+        assigneeHtml = `
+            <div class="task-assignee">
+                <div class="assignee-avatar">${initials}</div>
+                <span>${escHtml(task.assignee)}</span>
+            </div>`;
+    } else {
+        assigneeHtml = `<div class="task-assignee" style="color:var(--text-muted);font-size:0.72rem;">Unassigned</div>`;
+    }
+
     el.innerHTML = `
-    <div class="task-priority ${priorityClass}">${task.priority}</div>
-    <h4>${task.title}</h4>
-    <p class="task-assignee">${task.assignee || "Unassigned"}</p>
-    <button class="task-delete-btn" onclick="deleteTask('${task.id}')">✕</button>
-  `;
+        <button class="task-delete-btn" onclick="deleteTask('${task.id}')" title="Delete task">✕</button>
+        <h4>${escHtml(task.title)}</h4>
+        ${descHtml}
+        <div class="task-meta">
+            <span class="task-priority ${priorityClass}">${task.priority || 'Medium'}</span>
+            ${dateHtml}
+        </div>
+        <div class="task-footer">${assigneeHtml}</div>
+    `;
     return el;
+}
+
+/* ── HTML escape helper ───────────────────────────────── */
+function escHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 /* ═══════════════════════════════════════════════════════════
    COLUMN DRAG & DROP
 ═══════════════════════════════════════════════════════════ */
 function onColDragStart(e) {
-    // Only fire if dragging the column itself (not a task inside it)
     if (draggedTaskId) return;
     draggedColId = e.currentTarget.dataset.colId;
-    e.currentTarget.classList.add("dragging");
+    requestAnimationFrame(() => e.currentTarget.classList.add("dragging"));
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", draggedColId);
 }
 
 function onColDragOver(e) {
-    if (!draggedColId) return;
+    if (!draggedColId || draggedTaskId) return;
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
+    e.currentTarget.classList.add("drag-target");
+}
+
+function onColDragEnd(e) {
+    e.currentTarget.classList.remove("dragging", "drag-target");
+    document.querySelectorAll(".column").forEach(c => c.classList.remove("drag-target"));
+    draggedColId = null;
 }
 
 async function onColDrop(e) {
     e.preventDefault();
-    const targetColId = e.currentTarget.dataset.colId;
+    e.stopPropagation();
+    document.querySelectorAll(".column").forEach(c => c.classList.remove("drag-target", "dragging"));
 
-    if (!draggedColId || draggedColId === targetColId) {
-        draggedColId = null;
-        return;
-    }
+    const targetId = e.currentTarget.dataset.colId;
+    if (!draggedColId || draggedColId === targetId) { draggedColId = null; return; }
 
-    /* Reorder locally */
     const fromIdx = columns.findIndex(c => c.id === draggedColId);
-    const toIdx = columns.findIndex(c => c.id === targetColId);
+    const toIdx = columns.findIndex(c => c.id === targetId);
     const [moved] = columns.splice(fromIdx, 1);
     columns.splice(toIdx, 0, moved);
 
-    renderBoard();   // immediate local update
-
-    /* Persist to backend */
-    try {
-        await fetch(`${API}/columns/reorder`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ordered_ids: columns.map(c => c.id) })
-        });
-    } catch (err) {
-        console.error("Failed to save column order:", err);
-    }
-
     draggedColId = null;
-    document.querySelectorAll(".column.dragging").forEach(el =>
-        el.classList.remove("dragging")
-    );
+    renderBoard();
+    await reorderColumns(columns.map(c => c.id));
 }
 
 /* ═══════════════════════════════════════════════════════════
    TASK DRAG & DROP (between columns)
 ═══════════════════════════════════════════════════════════ */
 function onTaskDragOver(e) {
-    if (draggedColId) return;   // column drag takes priority
+    if (draggedColId) return;
     e.preventDefault();
     e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    e.currentTarget.classList.add("drag-over");
+}
+
+function onTaskDragLeave(e) {
+    e.currentTarget.classList.remove("drag-over");
 }
 
 async function onTaskDrop(e) {
     if (draggedColId) return;
     e.preventDefault();
     e.stopPropagation();
+    e.currentTarget.classList.remove("drag-over");
 
     const newStatus = e.currentTarget.dataset.status;
+    if (!draggedTaskId) return;
+
     const task = tasks.find(t => t.id === draggedTaskId);
-    if (!task || task.status === newStatus) { draggedTaskId = null; return; }
-
-    task.status = newStatus;
-    renderBoard();   // optimistic UI
-
-    try {
-        await fetch(`${API}/tasks/${task.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(task)
-        });
-    } catch (err) {
-        console.error("Failed to move task:", err);
-    }
     draggedTaskId = null;
-}
 
-/* ═══════════════════════════════════════════════════════════
-   TASKS
-═══════════════════════════════════════════════════════════ */
-async function loadTasks() {
-    try {
-        const res = await fetch(`${API}/tasks/`);
-        tasks = await res.json();
-        renderBoard();
-    } catch (err) {
-        console.error("Failed to load tasks:", err);
-    }
-}
+    if (!task || task.status === newStatus) return;
 
-async function createTask() {
-    const titleVal = document.getElementById("task-title").value.trim();
-    const priorityVal = document.getElementById("task-priority").value;
-    const assigneeVal = document.getElementById("task-assignee").value.trim();
-    const statusVal = document.getElementById("task-column-select").value;
-
-    if (!titleVal) { alert("Title is required."); return; }
-
-    try {
-        const res = await fetch(`${API}/tasks/`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                title: titleVal,
-                priority: priorityVal,
-                assignee: assigneeVal,
-                status: statusVal,
-                description: ""
-            })
-        });
-        const newTask = await res.json();
-        tasks.push(newTask);
-        closeTaskModal();
-        renderBoard();
-    } catch (err) {
-        console.error("Failed to create task:", err);
-    }
-}
-
-async function deleteTask(id) {
-    try {
-        await fetch(`${API}/tasks/${id}`, { method: "DELETE" });
-        tasks = tasks.filter(t => t.id !== id);
-        renderBoard();
-    } catch (err) {
-        console.error("Failed to delete task:", err);
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   CUSTOM COLUMNS
-═══════════════════════════════════════════════════════════ */
-async function createColumn() {
-    const name = document.getElementById("col-name").value.trim();
-    if (!name) { alert("Column name is required."); return; }
-
-    try {
-        const res = await fetch(`${API}/columns/`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name })
-        });
-        const newCol = await res.json();
-        columns.push(newCol);
-        closeColModal();
-        renderBoard();
-    } catch (err) {
-        console.error("Failed to create column:", err);
-    }
-}
-
-async function deleteColumn(colId) {
-    if (!confirm("Delete this column? Tasks inside will move to the first column.")) return;
-
-    try {
-        await fetch(`${API}/columns/${colId}`, { method: "DELETE" });
-        columns = columns.filter(c => c.id !== colId);
-        await loadTasks();   // tasks may have been moved server-side
-        renderBoard();
-    } catch (err) {
-        console.error("Failed to delete column:", err);
-    }
+    await updateTaskStatus(task.id, newStatus);
 }
 
 /* ═══════════════════════════════════════════════════════════
    MODALS
 ═══════════════════════════════════════════════════════════ */
 function showAddTask() {
-    document.getElementById("task-modal").classList.remove("hidden");
+    // Populate column select before showing
+    const sel = document.getElementById("task-column-select");
+    if (sel) {
+        sel.innerHTML = columns.map(c =>
+            `<option value="${c.id}">${escHtml(c.name)}</option>`
+        ).join("");
+    }
+    if (columns.length === 0) {
+        _toast('info', 'No Columns', 'Please create a column first before adding tasks.');
+        return;
+    }
+    document.getElementById("task-modal")?.classList.remove("hidden");
+    setTimeout(() => document.getElementById("task-title")?.focus(), 100);
 }
+
 function closeTaskModal() {
-    document.getElementById("task-modal").classList.add("hidden");
-    document.getElementById("task-title").value = "";
-    document.getElementById("task-assignee").value = "";
+    document.getElementById("task-modal")?.classList.add("hidden");
+    // Reset form
+    ["task-title", "task-desc", "task-assignee", "task-date"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    });
+    const pri = document.getElementById("task-priority");
+    if (pri) pri.value = "Medium";
 }
 
 function showAddColumn() {
-    document.getElementById("col-modal").classList.remove("hidden");
+    document.getElementById("col-modal")?.classList.remove("hidden");
+    setTimeout(() => document.getElementById("col-name")?.focus(), 100);
 }
+
 function closeColModal() {
-    document.getElementById("col-modal").classList.add("hidden");
-    document.getElementById("col-name").value = "";
+    document.getElementById("col-modal")?.classList.add("hidden");
+    const el = document.getElementById("col-name");
+    if (el) el.value = "";
 }
